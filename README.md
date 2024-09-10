@@ -46,6 +46,7 @@ Privileged Gateway Intents. Then click "Reset Token" which will ask for verifica
 Now you're ready to setup Discord  itself. Create a new server and add your application to the server. To do so go to your Discord Application, go to "Installation" and scroll down.
 Under Guild Install add "bot" to scopes and "admin" to permissions. Now you can use the Install Link above to add the app to your server. On your server, create a new Category. 
 In the category, create text channels of the streamers that you want to save Chat Messages from. Make sure the Discord channelname is exactly like the streamers Twitch channelname.
+Additionally, create the text channel "timeouts" and "bans" to track them.
 
 
 ## 4: Running
