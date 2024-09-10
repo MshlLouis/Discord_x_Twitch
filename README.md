@@ -18,13 +18,9 @@ Warning: This program might not be approved by Discords TOS and could potentiall
 
 There are several steps to get the program up and running. They are categorized into the following sections:
 
-3.1 Setting up Twitch Credentials
-
-
-3.2 Setting up Discord Credentials
-
-
-3.3 Setting up Discord
+- 3.1 Setting up Twitch Credentials
+- 3.2 Setting up Discord Credentials
+- 3.3 Setting up Discord
 
 
 ### 3.1 Setting up Twitch Credentials
