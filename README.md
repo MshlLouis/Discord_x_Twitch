@@ -59,6 +59,6 @@ all previously registered channels.
 
 
 Every Discord application is rate limited to 5 messages per 5 seconds per textchannel. Since big streamers chats regularly exceed this limit, the bot would be overloaded which is why messages are not handled individually but in batches.
-Discords max length for 1 message for standard accounts is 2000 characters. Whenever a new message is received for a channel, the number of chars is calculated. If the number of chars of the currect batch plus the new messages number of chars
+Discords max length for 1 message for standard accounts is 2000 characters. Whenever a new message is received for a channel, the number of chars is calculated. If the number of chars of the current batch plus the new messages number of chars
 is bigger than 1980 (this is currently just a test value), the whole batch is printed and a new one is being created with the new message as first entry. This way the batch size is not fixed like in previous versions making the whole program
-more efficient and allowing for more messages in spam situations to be saved.
+more efficient and allowing for more messages to be saved in spam situations.
