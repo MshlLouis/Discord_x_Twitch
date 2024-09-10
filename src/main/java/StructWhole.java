@@ -9,8 +9,9 @@ public class StructWhole {
 
     String channelname;
     MessageChannel channel;
+    int charCounter = 0;
     ArrayList<StructEvent> messages = new ArrayList<>();
-    public static DateTimeFormatter timeFormatDate = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
+    static DateTimeFormatter timeFormatDate = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
 
     public StructWhole(String channelname, MessageChannel channel) {
         this.channelname = channelname;
@@ -30,7 +31,6 @@ public class StructWhole {
         return this.channel;
     }
 
-
     public IRCMessageEvent getEvent(int index) {
         return this.messages.get(index).event;
     }
@@ -41,6 +41,18 @@ public class StructWhole {
 
     public String getDate(int index) {
         return this.messages.get(index).date;
+    }
+
+    public int getCharCounter() {
+        return this.charCounter;
+    }
+
+    public void addCharCounter(int num) {
+        this.charCounter += num;
+    }
+
+    public void resetCharCounter() {
+        this.charCounter = 0;
     }
 
     public void clearMessages() {
