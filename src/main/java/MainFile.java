@@ -2,6 +2,8 @@ import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
 import com.github.twitch4j.TwitchClient;
 import com.github.twitch4j.TwitchClientBuilder;
 import com.github.twitch4j.chat.events.channel.IRCMessageEvent;
+import com.github.twitch4j.chat.events.channel.UserBanEvent;
+import com.github.twitch4j.chat.events.channel.UserTimeoutEvent;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -13,9 +15,12 @@ import net.dv8tion.jda.api.utils.MemberCachePolicy;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.List;
 
 public class MainFile extends ListenerAdapter {
@@ -25,13 +30,21 @@ public class MainFile extends ListenerAdapter {
     static TwitchClient twitchClient;
     static JDABuilder builder;
     static ArrayList<StructWhole> all_channels = new ArrayList<>();
+    static HashMap<String,String[]> lastMessages = new HashMap<>();
+    static int lastMessagesTimer = 1800;
     static DateTimeFormatter timeFormatDate = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
+    static boolean printConcurrentModException = false;
+    static Guild guild;
+    static TextChannel timeouts;
+    static TextChannel bans;
 
     public static void main(String[] args) throws IOException {
 
         setCredentials();
         detectIRCMessageEvent(twitchClient);
-
+        timeoutCheck(twitchClient);
+        banCheck(twitchClient);
+        threadTimeoutMapControl();
     }
 
     public static void setCredentials() throws IOException {
@@ -78,8 +91,8 @@ public class MainFile extends ListenerAdapter {
                 String channelname = event.getChannelName().get();
                 MessageChannel channel;
 
-                for (StructWhole a : all_channels) {
-                    if(a.getChannelname().equals(channelname)) {
+                for (StructWhole channelStruct : all_channels) {
+                    if(channelStruct.getChannelname().equals(channelname)) {
                         String temp =  "0000.00.00 00:00:00"
                                 +" " +event.getUser().getId()
                                 +" " +event.getUserName().replaceAll("_", "\\\\_")
@@ -87,31 +100,108 @@ public class MainFile extends ListenerAdapter {
                                 +"\n";
                         int msgLen = temp.length();
 
-                        if(a.getCharCounter() + msgLen > 1980) {
-                            channel = a.getChannel();
-                            String out = "";
-
-                            for (int i = 0; i<a.getMessageSize(); i++) {
-                                out += a.getDate(i)
-                                        +" " +a.getEvent(i).getUser().getId()
-                                        +" " +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
-                                        +": " +a.getEvent(i).getMessage().get().replaceAll("_", "\\\\_")
-                                        +"\n";
-                            }
-                            a.clearMessages();
-                            a.resetCharCounter();
+                        if(channelStruct.getCharCounter() + msgLen > 1980) {
+                            channel = channelStruct.getChannel();
+                            String out = generateMessage(channelStruct);
                             channel.sendMessage(out).queue();
                         }
                         String date = timeFormatDate.format(LocalDateTime.now());
-                        a.addMessage(event, date);
-                        a.addCharCounter(msgLen);
-
-                        System.out.println(a.getChannelname() +" " +a.getMessageSize());
+                        channelStruct.addMessage(event, date);
+                        channelStruct.addCharCounter(msgLen);
+                        addHashMapEntry(event.getMessage().orElse(null), event.getUser().getId());
                         break;
                     }
                 }
             }
         });
+    }
+
+    public static void timeoutCheck(TwitchClient twitchClient) {
+        twitchClient.getEventManager().onEvent(UserTimeoutEvent.class, event -> {
+            BansAndTimeoutsHandler(event.getUser().getId(),
+                    event.getUser().getName(),
+                    event.getChannel().getId(),
+                    event.getChannel().getName(),
+                    event.getDuration(),
+                    timeouts);
+        });
+    }
+
+    public static void banCheck(TwitchClient twitchClient) {
+        twitchClient.getEventManager().onEvent(UserBanEvent.class, event -> {
+            BansAndTimeoutsHandler(event.getUser().getId(),
+                    event.getUser().getName(),
+                    event.getChannel().getId(),
+                    event.getChannel().getName(),
+                    -1,
+                    bans);
+        });
+    }
+
+    private static void BansAndTimeoutsHandler(String userId, String username, String channelId, String channelname, int duration, MessageChannel messageChannel) {
+        String[] arr = lastMessages.get(userId);
+
+        int userid = Integer.parseInt(userId);
+        String sanitizedUsername = username.replaceAll("_", "\\\\_");
+        int parsedChannelID = Integer.parseInt(channelId);
+        String sanitizedChannelname = channelname.replaceAll("_", "\\\\_");
+        String date = timeFormatDate.format(LocalDateTime.now());
+
+        if (arr == null) {
+            messageChannel.sendMessage("UserID: " + userid
+                    + "\nUsername: " + sanitizedUsername
+                    + "\nChannelID: " + parsedChannelID
+                    + "\nChannelname: " + sanitizedChannelname
+                    + "\nDate: " + date
+                    + "\nDuration: " + duration
+                    + "\nLast Message: [#No last message#]").queue();
+        } else {
+            String lastMsg = arr[1];
+            messageChannel.sendMessage("UserID: " + userid
+                    + "\nUsername: " + sanitizedUsername
+                    + "\nChannelID: " + parsedChannelID
+                    + "\nChannelname: " + sanitizedChannelname
+                    + "\nDate: " + date
+                    + "\nDuration: " + duration
+                    + "\nLast Message: " + lastMsg.trim().replaceAll("_", "\\\\_")).queue();
+        }
+    }
+
+    public static void addHashMapEntry(String lastMessage, String userID) {
+
+        String [] arr = new String[2];
+        arr[0] = System.currentTimeMillis()+"";
+        arr[1] = lastMessage;
+        lastMessages.put(userID,arr);
+
+    }
+
+    public static void threadTimeoutMapControl() {
+        Thread t7 = new Thread(new Runnable(){
+            @Override
+            public void run() {
+                while(true) {
+                    try {
+                        Thread.sleep(lastMessagesTimer*1000L);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    deleteHashMapEntries(System.currentTimeMillis());
+                }
+            }
+        });
+        t7.start();
+    }
+
+    public static void deleteHashMapEntries(long currentMillis) {
+        try {
+            lastMessages.entrySet().removeIf(e -> currentMillis - Long.parseLong(e.getValue()[0]) > lastMessagesTimer*1000L);
+        }
+        catch (ConcurrentModificationException e) {
+            if(printConcurrentModException) {
+                System.out.println("Error: Couldn't remove entry from HashMap \"lastMessages\"!");
+            }
+        }
     }
 
     @Override
@@ -120,6 +210,7 @@ public class MainFile extends ListenerAdapter {
             Message msg = event.getMessage();
 
             if (msg.getContentRaw().startsWith("!register")) {
+                event.getMessage().delete().queue();
                 String channelname = msg.getContentRaw().split(" ")[1];
                 twitchClient.getChat().joinChannel(channelname);
                 MessageChannel channel = event.getChannel();
@@ -138,6 +229,17 @@ public class MainFile extends ListenerAdapter {
             }
             if(msg.getContentRaw().equals("!start")) {
                 event.getMessage().delete().queue();
+
+                guild = event.getGuild();
+                for (int i = 0; i<guild.getTextChannels().size(); i++) {
+                    if(guild.getTextChannels().get(i).getName().equals("timeouts")) {
+                        timeouts = guild.getTextChannels().get(i);
+                    }
+                    if(guild.getTextChannels().get(i).getName().equals("bans")) {
+                        bans = guild.getTextChannels().get(i);
+                    }
+                }
+
                 event.getChannel().sendMessage("Bot started at: " +timeFormatDate.format(LocalDateTime.now())).queue();
                 try {
                     BufferedReader br = new BufferedReader(new FileReader("registered_channels.txt"));
@@ -179,6 +281,43 @@ public class MainFile extends ListenerAdapter {
                     }
                 }
             }
+            if (msg.getContentRaw().startsWith("!shutdown")) {
+                event.getMessage().delete().queue();
+                exitBot(event);
+            }
+        }
+    }
+
+    public static String generateMessage(StructWhole a) {
+        String out = "";
+        for (int i = 0; i<a.getMessageSize(); i++) {
+            out += a.getDate(i)
+                    +" " +a.getEvent(i).getUser().getId()
+                    +" " +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
+                    +": " +a.getEvent(i).getMessage().get().replaceAll("_", "\\\\_")
+                    +"\n";
+        }
+        a.clearMessages();
+        a.resetCharCounter();
+        return out;
+    }
+
+    public static void exitBot(MessageReceivedEvent event) {
+
+        for (StructWhole a : all_channels) {
+            twitchClient.getChat().leaveChannel(a.getChannelname());
+            String out = generateMessage(a);
+
+            if(!out.isEmpty()) {
+                a.getChannel().sendMessage(out).queue();
+            }
+        }
+        try {
+            event.getChannel().sendMessage("Shutdown bot at: " +timeFormatDate.format(LocalDateTime.now())).queue();
+            Thread.sleep(1000);
+            System.exit(0);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }
