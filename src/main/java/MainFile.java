@@ -2,18 +2,24 @@ import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
 import com.github.twitch4j.TwitchClient;
 import com.github.twitch4j.TwitchClientBuilder;
 import com.github.twitch4j.chat.events.channel.IRCMessageEvent;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.entities.channel.ChannelType;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.requests.RestAction;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainFile extends ListenerAdapter {
 
@@ -77,21 +83,50 @@ public class MainFile extends ListenerAdapter {
 
                 for (StructWhole a : all_channels) {
                     if(a.getChannelname().equals(channelname)) {
-                        a.addMessage(event);
-                        System.out.println(a.getMessageSize());
-                        if(a.getMessageSize() >= batchSize) {
+                        String temp =  "0000.00.00 00:00:00"
+                                +" " +event.getUser().getId()
+                                +" " +event.getUserName().replaceAll("_", "\\\\_")
+                                +": " +event.getMessage().get().replaceAll("_", "\\\\_")
+                                +"\n";
+                        int msgLen = temp.length();
+
+                        if(a.getCharCounter() + msgLen > 1980) {
                             channel = a.getChannel();
                             String out = "";
 
                             for (int i = 0; i<a.getMessageSize(); i++) {
-                                out += a.getDate(i) +" "
-                                        +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
+                                out += a.getDate(i)
+                                        +" " +a.getEvent(i).getUser().getId()
+                                        +" " +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
+                                        +": " +a.getEvent(i).getMessage().get().replaceAll("_", "\\\\_")
+                                        +"\n";
+                            }
+                            a.clearMessages();
+                            a.resetCharCounter();
+                            channel.sendMessage(out).queue();
+                        }
+
+                        a.addMessage(event);
+                        a.addCharCounter(msgLen);
+
+
+
+                        System.out.println(a.getChannelname() +" " +a.getMessageSize());
+
+
+                       /* if(a.getMessageSize() >= batchSize) {
+                            channel = a.getChannel();
+                            String out = "";
+
+                            for (int i = 0; i<a.getMessageSize(); i++) {
+                                out += a.getDate(i)
+                                        +" " +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
                                         +": " +a.getEvent(i).getMessage().get().replaceAll("_", "\\\\_")
                                         +"\n";
                             }
                             a.clearMessages();
                             channel.sendMessage(out).queue();
-                        }
+                        }*/
                         break;
                     }
                 }
@@ -105,11 +140,51 @@ public class MainFile extends ListenerAdapter {
             Message msg = event.getMessage();
 
             if (msg.getContentRaw().startsWith("!register")) {
-                String channel_name = msg.getContentRaw().split(" ")[1];
-                twitchClient.getChat().joinChannel(channel_name);
+                String channelname = msg.getContentRaw().split(" ")[1];
+                twitchClient.getChat().joinChannel(channelname);
                 MessageChannel channel = event.getChannel();
-                StructWhole temp = new StructWhole(channel_name, channel);
+                StructWhole temp = new StructWhole(channelname, channel);
                 all_channels.add(temp);
+
+                try (FileOutputStream fos = new FileOutputStream("registered_channels.txt", true);
+                     OutputStreamWriter osw = new OutputStreamWriter(fos, StandardCharsets.UTF_8);
+                     BufferedWriter bw = new BufferedWriter(osw)) {
+
+                    bw.write(channel + "\n");
+                    bw.flush();
+                } catch (IOException ignored) {
+
+                }
+            }
+            if(msg.getContentRaw().equals("!start")) {
+                try {
+                    BufferedReader br = new BufferedReader(new FileReader("registered_channels.txt"));
+                    String line;
+
+                    Guild guild = event.getGuild();
+                    List<TextChannel> guildChannels = guild.getTextChannels();
+
+                    while ((line = br.readLine()) != null) {
+                        if(guildChannels.toString().contains(line)) {
+                            int index = 0;
+                            for (int i = 0; i<guildChannels.size(); i++) {
+                                if(guildChannels.get(i).toString().equals(line)) {
+                                    index = i;
+                                    break;
+                                }
+                            }
+                            StructWhole temp = new StructWhole(guildChannels.get(index).getName(), guildChannels.get(index));
+                            all_channels.add(temp);
+                            twitchClient.getChat().joinChannel(guildChannels.get(index).getName());
+                        }
+                        else {
+                            System.out.println("No channel found for " +line);
+                        }
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
             }
         }
     }
