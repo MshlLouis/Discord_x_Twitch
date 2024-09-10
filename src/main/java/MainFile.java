@@ -2,22 +2,19 @@ import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
 import com.github.twitch4j.TwitchClient;
 import com.github.twitch4j.TwitchClientBuilder;
 import com.github.twitch4j.chat.events.channel.IRCMessageEvent;
-import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.*;
-import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
-import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
-import net.dv8tion.jda.api.requests.RestAction;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,8 +24,8 @@ public class MainFile extends ListenerAdapter {
     static OAuth2Credential credential;
     static TwitchClient twitchClient;
     static JDABuilder builder;
-    static int batchSize = 20;
     static ArrayList<StructWhole> all_channels = new ArrayList<>();
+    static DateTimeFormatter timeFormatDate = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
 
     public static void main(String[] args) throws IOException {
 
@@ -105,28 +102,11 @@ public class MainFile extends ListenerAdapter {
                             a.resetCharCounter();
                             channel.sendMessage(out).queue();
                         }
-
-                        a.addMessage(event);
+                        String date = timeFormatDate.format(LocalDateTime.now());
+                        a.addMessage(event, date);
                         a.addCharCounter(msgLen);
 
-
-
                         System.out.println(a.getChannelname() +" " +a.getMessageSize());
-
-
-                       /* if(a.getMessageSize() >= batchSize) {
-                            channel = a.getChannel();
-                            String out = "";
-
-                            for (int i = 0; i<a.getMessageSize(); i++) {
-                                out += a.getDate(i)
-                                        +" " +a.getEvent(i).getUserName().replaceAll("_", "\\\\_")
-                                        +": " +a.getEvent(i).getMessage().get().replaceAll("_", "\\\\_")
-                                        +"\n";
-                            }
-                            a.clearMessages();
-                            channel.sendMessage(out).queue();
-                        }*/
                         break;
                     }
                 }
@@ -157,6 +137,8 @@ public class MainFile extends ListenerAdapter {
                 }
             }
             if(msg.getContentRaw().equals("!start")) {
+                event.getMessage().delete().queue();
+                event.getChannel().sendMessage("Bot started at: " +timeFormatDate.format(LocalDateTime.now())).queue();
                 try {
                     BufferedReader br = new BufferedReader(new FileReader("registered_channels.txt"));
                     String line;
@@ -185,6 +167,17 @@ public class MainFile extends ListenerAdapter {
                     throw new RuntimeException(e);
                 }
 
+            }
+            if (msg.getContentRaw().startsWith("!getSize")) {
+                event.getMessage().delete().queue();
+                String channelname = msg.getContentRaw().split(" ")[1];
+
+                for (StructWhole a : all_channels) {
+                    if (a.getChannelname().equals(channelname)) {
+                        MessageChannel channel = event.getChannel();
+                        channel.sendMessage("Current Message Size for Channel \"" +channelname +"\": " +a.getMessageSize()).queue();
+                    }
+                }
             }
         }
     }
