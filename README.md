@@ -51,6 +51,6 @@ In the category, create text channels of the streamers that you want to save Cha
 
 ## 4: Running
 
-Now you're ready to run the bot. Once it's up it should appear in the memberlist. Now the only thing left to do is write the command "!register [Twitch Channelname]" and the bot will
-save all the received messages. Since the rate limit of Discord Bots is 5 messages per 5 seconds, the messages are collected into batches of 20 and then printed as 1 message.
+Now you're ready to run the bot. Once it's up it should appear in the memberlist. Now the only thing left to do is to open a text channel and write the command "!register [Twitch Channelname]" and the bot will
+save all the received messages. Since the rate limit of Discord Bots is 5 messages per 5 seconds per text channel, the messages are collected into batches of 20 and then printed as 1 message.
 This can be changed depending on the chats activity.
