@@ -1,8 +1,5 @@
 import com.github.twitch4j.chat.events.channel.IRCMessageEvent;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 public class StructWhole {
@@ -11,15 +8,14 @@ public class StructWhole {
     MessageChannel channel;
     int charCounter = 0;
     ArrayList<StructEvent> messages = new ArrayList<>();
-    static DateTimeFormatter timeFormatDate = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
 
     public StructWhole(String channelname, MessageChannel channel) {
         this.channelname = channelname;
         this.channel =  channel;
     }
 
-    public void addMessage(IRCMessageEvent event) {
-        StructEvent temp = new StructEvent(event, timeFormatDate.format(LocalDateTime.now()));
+    public void addMessage(IRCMessageEvent event, String date) {
+        StructEvent temp = new StructEvent(event, date);
         this.messages.add(temp);
     }
 
